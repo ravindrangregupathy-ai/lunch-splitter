@@ -92,14 +92,7 @@
   .upload-area .label { font-size: 14px; color: var(--text-secondary); }
   .upload-area .sublabel { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 
-  .preview-img {
-    width: 100%;
-    max-height: 220px;
-    object-fit: cover;
-    border-radius: 8px;
-    margin-top: 10px;
-    display: none;
-  }
+
 
   /* ── Pax input ── */
   .pax-row {
@@ -372,14 +365,32 @@
     <!-- Receipt upload -->
     <div class="card">
       <div class="card-title">Receipt photo</div>
-      <div class="upload-area" id="upload-area">
-        <input type="file" id="receipt-input" accept="image/*" capture="environment" onchange="handleImageUpload(event)">
-        <div id="upload-placeholder">
-          <div class="icon">📷</div>
-          <div class="label">Tap to take a photo or upload</div>
-          <div class="sublabel">JPG, PNG · Max 5MB</div>
+
+      <div id="upload-placeholder">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <!-- Take photo -->
+          <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:18px 8px;border:1.5px dashed var(--border-strong);border-radius:var(--radius);cursor:pointer;text-align:center;">
+            <input type="file" accept="image/*" capture="environment" onchange="handleImageUpload(event)" style="display:none;">
+            <span style="font-size:26px;">📷</span>
+            <span style="font-size:13px;color:var(--text-secondary);font-weight:500;">Take photo</span>
+            <span style="font-size:11px;color:var(--text-muted);">Open camera</span>
+          </label>
+          <!-- Upload from gallery -->
+          <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:18px 8px;border:1.5px dashed var(--border-strong);border-radius:var(--radius);cursor:pointer;text-align:center;">
+            <input type="file" accept="image/*" onchange="handleImageUpload(event)" style="display:none;">
+            <span style="font-size:26px;">🖼️</span>
+            <span style="font-size:13px;color:var(--text-secondary);font-weight:500;">Upload photo</span>
+            <span style="font-size:11px;color:var(--text-muted);">From gallery</span>
+          </label>
         </div>
-        <img id="preview-img" class="preview-img" alt="Receipt preview">
+        <p style="font-size:11px;color:var(--text-muted);text-align:center;">JPG, PNG · Max 5MB</p>
+      </div>
+
+      <div id="preview-container" style="display:none;">
+        <img id="preview-img" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;display:block;" alt="Receipt preview">
+        <button onclick="clearImage()" style="margin-top:8px;width:100%;padding:8px;border-radius:8px;border:0.5px solid var(--border-strong);background:var(--surface-alt);color:var(--text-secondary);font-size:13px;cursor:pointer;">
+          × Remove photo
+        </button>
       </div>
     </div>
 
@@ -532,12 +543,20 @@ function handleImageUpload(e) {
     state.imageMediaType = header.match(/:(.*?);/)[1];
 
     document.getElementById("upload-placeholder").style.display = "none";
-    const img = document.getElementById("preview-img");
-    img.src = dataUrl;
-    img.style.display = "block";
+    document.getElementById("preview-container").style.display = "block";
+    document.getElementById("preview-img").src = dataUrl;
     validateForm();
   };
   reader.readAsDataURL(file);
+}
+
+function clearImage() {
+  state.imageBase64 = null;
+  state.imageMediaType = null;
+  document.getElementById("preview-container").style.display = "none";
+  document.getElementById("preview-img").src = "";
+  document.getElementById("upload-placeholder").style.display = "block";
+  validateForm();
 }
 
 function validateForm() {
@@ -757,10 +776,9 @@ function showError(msg) {
 // ── Reset ──
 function resetApp() {
   state = { imageBase64: null, imageMediaType: null, billData: null, assignments: {} };
-  document.getElementById("preview-img").style.display = "none";
   document.getElementById("preview-img").src = "";
+  document.getElementById("preview-container").style.display = "none";
   document.getElementById("upload-placeholder").style.display = "block";
-  document.getElementById("receipt-input").value = "";
   document.getElementById("splitter-section").style.display = "none";
   document.getElementById("setup-section").style.display = "block";
   document.getElementById("scan-btn").style.display = "block";
