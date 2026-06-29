@@ -391,6 +391,7 @@
         <button onclick="clearImage()" style="margin-top:8px;width:100%;padding:8px;border-radius:8px;border:0.5px solid var(--border-strong);background:var(--surface-alt);color:var(--text-secondary);font-size:13px;cursor:pointer;">
           × Remove photo
         </button>
+        <p id="img-size-label" style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:6px;"></p>
       </div>
     </div>
 
@@ -537,15 +538,32 @@ function handleImageUpload(e) {
 
   const reader = new FileReader();
   reader.onload = (ev) => {
-    const dataUrl = ev.target.result;
-    const [header, b64] = dataUrl.split(",");
-    state.imageBase64 = b64;
-    state.imageMediaType = header.match(/:(.*?);/)[1];
+    const img = new Image();
+    img.onload = () => {
+      // Compress via canvas — max 1200px wide, 75% quality
+      const MAX_WIDTH = 1200;
+      const scale = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
+      const canvas = document.createElement("canvas");
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    document.getElementById("upload-placeholder").style.display = "none";
-    document.getElementById("preview-container").style.display = "block";
-    document.getElementById("preview-img").src = dataUrl;
-    validateForm();
+      const compressed = canvas.toDataURL("image/jpeg", 0.75);
+      const [header, b64] = compressed.split(",");
+      state.imageBase64    = b64;
+      state.imageMediaType = "image/jpeg";
+
+      // Show size feedback
+      const kb = Math.round((b64.length * 3) / 4 / 1024);
+      document.getElementById("img-size-label").textContent = `Image ready · ~${kb} KB`;
+
+      document.getElementById("upload-placeholder").style.display = "none";
+      document.getElementById("preview-container").style.display = "block";
+      document.getElementById("preview-img").src = compressed;
+      validateForm();
+    };
+    img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
 }
@@ -555,6 +573,7 @@ function clearImage() {
   state.imageMediaType = null;
   document.getElementById("preview-container").style.display = "none";
   document.getElementById("preview-img").src = "";
+  document.getElementById("img-size-label").textContent = "";
   document.getElementById("upload-placeholder").style.display = "block";
   validateForm();
 }
