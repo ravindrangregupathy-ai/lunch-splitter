@@ -165,6 +165,54 @@
     margin-bottom: 12px;
   }
 
+  /* ── Rate limit modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 24px 20px;
+    max-width: 340px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  }
+  .modal-icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+  }
+  .modal-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .modal-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 18px;
+  }
+  .modal-btn {
+    width: 100%;
+    padding: 11px;
+    border: none;
+    border-radius: 10px;
+    background: var(--dark-header);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
   /* ── Pax summary cards ── */
   .pax-grid {
     display: grid;
@@ -573,6 +621,18 @@
   </div>
 </div>
 
+<!-- ── Rate limit modal ── -->
+<div class="modal-overlay" id="rate-limit-modal">
+  <div class="modal-box">
+    <div class="modal-icon">⏳</div>
+    <div class="modal-title">Slow down a little</div>
+    <div class="modal-text" id="rate-limit-text">
+      You've hit the scan limit for now. Please wait a bit before trying again.
+    </div>
+    <button class="modal-btn" onclick="closeRateLimitModal()">Got it</button>
+  </div>
+</div>
+
 <!-- ── Bottom sheet overlay ── -->
 <div class="sheet-overlay" id="sheet-overlay" onclick="closeSheet()"></div>
 <div class="bottom-sheet" id="bottom-sheet">
@@ -713,6 +773,13 @@ async function scanReceipt() {
       }),
     });
 
+    if (res.status === 429) {
+      const json = await res.json().catch(() => ({}));
+      openRateLimitModal(json.error);
+      document.getElementById("scan-btn").style.display = "block";
+      return;
+    }
+
     const json = await res.json();
 
     if (!res.ok || !json.success) {
@@ -728,6 +795,19 @@ async function scanReceipt() {
   } finally {
     document.getElementById("loading").style.display = "none";
   }
+}
+
+// ── Rate limit modal ──
+function openRateLimitModal(serverMessage) {
+  const textEl = document.getElementById("rate-limit-text");
+  textEl.textContent = serverMessage && serverMessage.trim().length > 0
+    ? serverMessage
+    : "You've hit the scan limit for now. Please wait a bit before trying again.";
+  document.getElementById("rate-limit-modal").classList.add("open");
+}
+
+function closeRateLimitModal() {
+  document.getElementById("rate-limit-modal").classList.remove("open");
 }
 
 // ── Init splitter ──
