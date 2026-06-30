@@ -397,6 +397,7 @@
     display: none;
     margin-top: 10px;
   }
+  .wa-box.visible { display: block; }
   .wa-box p { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
   .wa-textarea {
     width: 100%; min-height: 130px;
@@ -939,7 +940,7 @@ function generateSummary() {
 
 function toggleWa() {
   const box = document.getElementById("wa-box");
-  box.style.display = box.style.display === "none" ? "block" : "none";
+  box.classList.toggle("visible");
 }
 
 function showError(msg) {
@@ -958,7 +959,7 @@ function resetApp() {
   document.getElementById("setup-section").style.display = "block";
   document.getElementById("scan-btn").style.display = "block";
   document.getElementById("summary-card").style.display = "none";
-  document.getElementById("wa-box").style.display = "none";
+  document.getElementById("wa-box").classList.remove("visible");
   document.getElementById("generate-btn").style.display = "none";
   showError("");
   validateForm();
