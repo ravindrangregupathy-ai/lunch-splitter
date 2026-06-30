@@ -191,10 +191,26 @@
   }
   .bill-header, .bill-row, .bill-tax-row, .bill-total-row {
     display: grid;
-    grid-template-columns: 22px 1fr 58px 112px;
+    grid-template-columns: 22px 1fr 58px 88px 36px;
     gap: 6px;
     padding: 8px 12px;
     align-items: center;
+  }
+  .split-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    border: 0.5px solid var(--border-strong);
+    background: var(--surface-alt);
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .split-btn.active {
+    background: #eef2ff;
+    border-color: #818cf8;
+    color: #3730a3;
   }
   .bill-header {
     background: var(--surface-alt);
@@ -289,6 +305,82 @@
     font-weight: 500;
     font-size: 13px;
     border-bottom: 0.5px solid var(--border);
+  }
+
+  /* ── Bottom sheet ── */
+  .sheet-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 100;
+  }
+  .sheet-overlay.open { display: block; }
+  .bottom-sheet {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    padding: 0 0 32px;
+    z-index: 101;
+    max-height: 80vh;
+    overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+  }
+  .bottom-sheet.open { transform: translateY(0); }
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: var(--border-strong);
+    border-radius: 2px;
+    margin: 12px auto 16px;
+  }
+  .sheet-header {
+    padding: 0 16px 12px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .sheet-title { font-size: 15px; font-weight: 500; color: var(--text); }
+  .sheet-sub   { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .sheet-pax-list { padding: 8px 0; }
+  .sheet-pax-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 0.5px solid var(--border);
+    cursor: pointer;
+  }
+  .sheet-pax-row:active { background: var(--surface-alt); }
+  .sheet-pax-left { display: flex; align-items: center; gap: 10px; }
+  .sheet-checkbox {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    border: 1.5px solid var(--border-strong);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .sheet-checkbox.checked {
+    background: #818cf8;
+    border-color: #818cf8;
+    color: #fff;
+  }
+  .sheet-pax-name { font-size: 14px; color: var(--text); }
+  .sheet-pax-share { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+  .sheet-footer {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; padding: 12px 16px 0;
+  }
+  .sheet-cancel {
+    padding: 12px; border-radius: 10px;
+    border: 0.5px solid var(--border-strong);
+    background: var(--surface-alt);
+    color: var(--text-secondary);
+    font-size: 14px; cursor: pointer;
+  }
+  .sheet-confirm {
+    padding: 12px; border-radius: 10px;
+    border: none;
+    background: #1a1a2e;
+    color: #fff;
+    font-size: 14px; font-weight: 500; cursor: pointer;
   }
 
   /* ── WhatsApp ── */
@@ -444,6 +536,7 @@
         <span>Item</span>
         <span style="text-align:right;">RM</span>
         <span style="text-align:center;">Assign to</span>
+        <span style="text-align:center;">Split</span>
       </div>
       <div id="items-container"></div>
       <div class="bill-total-row">
@@ -479,9 +572,24 @@
   </div>
 </div>
 
+<!-- ── Bottom sheet overlay ── -->
+<div class="sheet-overlay" id="sheet-overlay" onclick="closeSheet()"></div>
+<div class="bottom-sheet" id="bottom-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-title" id="sheet-title"></div>
+    <div class="sheet-sub"  id="sheet-sub"></div>
+  </div>
+  <div class="sheet-pax-list" id="sheet-pax-list"></div>
+  <div class="sheet-footer">
+    <button class="sheet-cancel"  onclick="closeSheet()">Cancel</button>
+    <button class="sheet-confirm" onclick="confirmSplit()">Confirm split</button>
+  </div>
+</div>
+
 <script>
 // ── Config — update this after deploying your Cloudflare Worker ──
-const WORKER_URL = "https://lunch-splitter.ravindran-gregupathy.workers.dev/scan";
+const WORKER_URL = "https://YOUR_WORKER_NAME.YOUR_SUBDOMAIN.workers.dev/scan";
 
 // ── Color palette (up to 8 pax) ──
 const PALETTE = [
@@ -624,114 +732,173 @@ async function scanReceipt() {
 // ── Init splitter ──
 function initSplitter() {
   const { items, pax, restaurant, date, grandTotal } = state.billData;
-
-  // Default assignments
   state.assignments = {};
   items.forEach(item => {
-    state.assignments[item.id] = item.isTax ? "Split Equally" : "Unassigned";
+    state.assignments[item.id] = (item.isTax || item.price === 0) ? "Split Equally" : "Unassigned";
   });
-
   document.getElementById("setup-section").style.display = "none";
   document.getElementById("splitter-section").style.display = "block";
   document.getElementById("restaurant-info").textContent = (restaurant || "") + (date ? " · " + date : "");
   document.getElementById("grand-total-display").textContent = Number(grandTotal).toFixed(2);
-
-  renderPaxCards();
-  renderItems();
-  updateBadge();
+  renderPaxCards(); renderItems(); updateBadge();
 }
 
-// ── Calc totals ──
 function calcTotals() {
   const { items, pax } = state.billData;
   const totalTax = items.filter(i => i.isTax).reduce((s, i) => s + i.price, 0);
   const taxPerPerson = pax.length > 0 ? totalTax / pax.length : 0;
-
   const totals = {};
-  pax.forEach((p, i) => { totals[p] = { direct: 0, split: 0, tax: taxPerPerson, items: [], color: PALETTE[i % PALETTE.length] }; });
-
-  const splitTotal = items.filter(i => !i.isTax && state.assignments[i.id] === "Split Equally").reduce((s, i) => s + i.price, 0);
-  const splitShare = pax.length > 0 ? splitTotal / pax.length : 0;
-
+  pax.forEach(p => { totals[p] = { direct: 0, tax: taxPerPerson, items: [], splitItems: [], partialItems: [] }; });
   items.forEach(item => {
     if (item.isTax) return;
-    const who = state.assignments[item.id];
-    if (totals[who]) { totals[who].direct += item.price; totals[who].items.push(item); }
+    const a = state.assignments[item.id];
+    if (a === "Split Equally") {
+      const share = item.price / pax.length;
+      pax.forEach(p => totals[p].splitItems.push({ name: item.name, share }));
+    } else if (a && typeof a === "object" && a.partial) {
+      const share = a.partial.length > 0 ? item.price / a.partial.length : 0;
+      a.partial.forEach(p => { if (totals[p]) totals[p].partialItems.push({ name: item.name, share }); });
+    } else if (a && totals[a]) {
+      totals[a].direct += item.price;
+      totals[a].items.push(item);
+    }
   });
-
-  pax.forEach(p => { totals[p].split = splitShare; totals[p].total = totals[p].direct + totals[p].split + totals[p].tax; });
+  pax.forEach(p => {
+    const s  = totals[p].splitItems.reduce((acc, i) => acc + i.share, 0);
+    const pt = totals[p].partialItems.reduce((acc, i) => acc + i.share, 0);
+    totals[p].total = totals[p].direct + s + pt + totals[p].tax;
+  });
   return totals;
 }
 
-// ── Render pax cards ──
 function renderPaxCards() {
   const totals = calcTotals();
   const { pax } = state.billData;
   document.getElementById("pax-grid").innerHTML = pax.map((p, i) => {
-    const t = totals[p];
-    const c = PALETTE[i % PALETTE.length];
+    const t = totals[p], c = PALETTE[i % PALETTE.length];
+    const cnt = t.items.length + t.splitItems.length + t.partialItems.length;
     return `<div class="pax-card" style="background:${c.bg};border-color:${c.border};">
       <div class="name"  style="color:${c.text};">${p}</div>
       <div class="total" style="color:${c.text};">RM ${t.total.toFixed(2)}</div>
-      <div class="meta"  style="color:${c.text};">${t.items.length} item${t.items.length!==1?"s":""} · tax RM ${t.tax.toFixed(2)}</div>
+      <div class="meta"  style="color:${c.text};">${cnt} item${cnt!==1?"s":""} &middot; tax RM ${t.tax.toFixed(2)}</div>
     </div>`;
   }).join("");
 }
 
-// ── Render items ──
 function renderItems() {
   const { items, pax } = state.billData;
-  const options = `<option value="Unassigned">Unassigned</option><option value="Split Equally">Split Equally</option>${pax.map(p=>`<option value="${p}">${p}</option>`).join("")}`;
-
+  const baseOpts = `<option value="Unassigned">Unassigned</option><option value="Split Equally">Split Equally</option>${pax.map(p=>`<option value="${p}">${p}</option>`).join("")}`;
   document.getElementById("items-container").innerHTML = items.map((item, idx) => {
     if (item.isTax) {
       return `<div class="bill-tax-row">
         <span style="font-size:11px;color:var(--text-muted);">${item.id}</span>
         <span>${item.name}</span>
         <span class="item-price">${Number(item.price).toFixed(2)}</span>
-        <span class="tax-lock">split equally 🔒</span>
+        <span class="tax-lock" style="text-align:center;">all &#128274;</span>
+        <span></span>
       </div>`;
     }
-    const assigned = state.assignments[item.id];
-    const paxIdx = pax.indexOf(assigned);
-    const c = paxIdx >= 0 ? PALETTE[paxIdx % PALETTE.length] : null;
-    const rowBg = c ? c.bg : (idx % 2 === 0 ? "var(--surface)" : "var(--surface-alt)");
-    const selStyle = c
-      ? `border:1.5px solid ${c.border};background:${c.bg};color:${c.text};font-weight:500;`
-      : "";
+    const a = state.assignments[item.id];
+    const isPartial = a && typeof a === "object" && a.partial;
+    let rowBg, selStyle, dropVal, extraOpt = "";
+    if (isPartial) {
+      rowBg = "#eef2ff";
+      selStyle = "border:1.5px solid #818cf8;background:#eef2ff;color:#3730a3;font-weight:500;";
+      dropVal = "__partial__";
+      extraOpt = `<option value="__partial__" selected>Split (${a.partial.length})</option>`;
+    } else {
+      const pi = pax.indexOf(a), c = pi >= 0 ? PALETTE[pi % PALETTE.length] : null;
+      rowBg = c ? c.bg : (idx % 2 === 0 ? "var(--surface)" : "var(--surface-alt)");
+      selStyle = c ? `border:1.5px solid ${c.border};background:${c.bg};color:${c.text};font-weight:500;` : "";
+      dropVal = a || "Unassigned";
+    }
+    const opts = extraOpt + baseOpts.replace(`value="${dropVal}"`, `value="${dropVal}" selected`);
     return `<div class="bill-row" style="background:${rowBg};">
       <span style="font-size:11px;color:var(--text-muted);">${item.id}</span>
       <span style="line-height:1.3;">${item.name}</span>
       <span class="item-price">${Number(item.price).toFixed(2)}</span>
-      <select class="assign-select" style="${selStyle}" onchange="assign(${item.id}, this.value)">
-        ${options.replace(`value="${assigned}"`, `value="${assigned}" selected`)}
-      </select>
+      <select class="assign-select" style="${selStyle}" onchange="assign(${item.id}, this.value)">${opts}</select>
+      <button class="split-btn ${isPartial?"active":""}" onclick="openSheet(${item.id})" title="Partial split">&divide;</button>
     </div>`;
   }).join("");
 }
 
-// ── Assign handler ──
 function assign(id, val) {
+  if (val === "__partial__") return;
   state.assignments[id] = val;
-  renderPaxCards();
-  renderItems();
-  updateBadge();
+  refreshUI();
+}
+
+function refreshUI() {
+  renderPaxCards(); renderItems(); updateBadge();
   document.getElementById("summary-card").style.display = "none";
   document.getElementById("generate-btn").style.display = "none";
   checkAllAssigned();
 }
 
-// ── Badge ──
+let sheetItemId = null, sheetSelected = [];
+
+function openSheet(itemId) {
+  const { items, pax } = state.billData;
+  const item = items.find(i => i.id === itemId);
+  if (!item) return;
+  sheetItemId = itemId;
+  const a = state.assignments[itemId];
+  sheetSelected = (a && typeof a === "object" && a.partial) ? [...a.partial] : (pax.includes(a) ? [a] : []);
+  document.getElementById("sheet-title").textContent = item.name;
+  renderSheetPax(item);
+  document.getElementById("sheet-overlay").classList.add("open");
+  document.getElementById("bottom-sheet").classList.add("open");
+}
+
+function renderSheetPax(item) {
+  const { pax } = state.billData;
+  const cnt = sheetSelected.length;
+  document.getElementById("sheet-sub").textContent = cnt > 0
+    ? `RM ${Number(item.price).toFixed(2)} / ${cnt} = RM ${(item.price/cnt).toFixed(2)} each`
+    : `RM ${Number(item.price).toFixed(2)} - select people below`;
+  document.getElementById("sheet-pax-list").innerHTML = pax.map((p, i) => {
+    const checked = sheetSelected.includes(p), c = PALETTE[i % PALETTE.length];
+    const share = (checked && cnt > 0) ? `RM ${(item.price/cnt).toFixed(2)}` : "";
+    return `<div class="sheet-pax-row" onclick="toggleSheetPax('${p}',${item.id})">
+      <div class="sheet-pax-left">
+        <div class="sheet-checkbox ${checked?"checked":""}">${checked?"&#10003;":""}</div>
+        <span class="sheet-pax-name" style="color:${checked?c.text:"var(--text)"};">${p}</span>
+      </div>
+      <span class="sheet-pax-share" style="color:${c.text};">${share}</span>
+    </div>`;
+  }).join("");
+}
+
+function toggleSheetPax(name, itemId) {
+  const { items } = state.billData;
+  const item = items.find(i => i.id === itemId);
+  sheetSelected = sheetSelected.includes(name)
+    ? sheetSelected.filter(p => p !== name)
+    : [...sheetSelected, name];
+  renderSheetPax(item);
+}
+
+function confirmSplit() {
+  if (sheetSelected.length === 0) { closeSheet(); return; }
+  const { pax } = state.billData;
+  if (sheetSelected.length === pax.length) state.assignments[sheetItemId] = "Split Equally";
+  else if (sheetSelected.length === 1) state.assignments[sheetItemId] = sheetSelected[0];
+  else state.assignments[sheetItemId] = { partial: [...sheetSelected] };
+  closeSheet(); refreshUI();
+}
+
+function closeSheet() {
+  document.getElementById("sheet-overlay").classList.remove("open");
+  document.getElementById("bottom-sheet").classList.remove("open");
+  sheetItemId = null; sheetSelected = [];
+}
+
 function updateBadge() {
   const count = state.billData.items.filter(i => !i.isTax && state.assignments[i.id] === "Unassigned").length;
   const badge = document.getElementById("unassigned-badge");
-  if (count > 0) {
-    badge.textContent = count + " unassigned";
-    badge.className = "badge badge-warn";
-  } else {
-    badge.textContent = "✓ All assigned";
-    badge.className = "badge badge-ok";
-  }
+  badge.textContent = count > 0 ? `${count} unassigned` : "All assigned";
+  badge.className   = count > 0 ? "badge badge-warn" : "badge badge-ok";
 }
 
 function checkAllAssigned() {
@@ -739,64 +906,53 @@ function checkAllAssigned() {
   document.getElementById("generate-btn").style.display = count === 0 ? "block" : "none";
 }
 
-// ── Generate summary ──
 function generateSummary() {
   const totals = calcTotals();
-  const { pax, grandTotal } = state.billData;
-
+  const { pax, grandTotal, restaurant, date } = state.billData;
   document.getElementById("summary-rows").innerHTML = pax.map((p, i) => {
-    const t = totals[p];
-    const c = PALETTE[i % PALETTE.length];
-    const itemLines = t.items.map(i => `<span>· ${i.name} — RM ${i.price.toFixed(2)}</span>`).join("");
-    const splitLine = t.split > 0 ? `<span>· Split items share — RM ${t.split.toFixed(2)}</span>` : "";
+    const t = totals[p], c = PALETTE[i % PALETTE.length];
+    const dl = t.items.map(it => `<span>- ${it.name} -- RM ${it.price.toFixed(2)}</span>`).join("");
+    const sl = t.splitItems.map(it => `<span>- ${it.name} (split all) -- RM ${it.share.toFixed(2)}</span>`).join("");
+    const pl = t.partialItems.map(it => `<span>- ${it.name} (partial) -- RM ${it.share.toFixed(2)}</span>`).join("");
     return `<div class="summary-row">
       <div class="summary-row-top">
         <span class="summary-name">${p}</span>
         <span class="summary-total" style="color:${c.text};">RM ${t.total.toFixed(2)}</span>
       </div>
-      <div class="summary-lines">
-        ${itemLines}${splitLine}
-        <span>· Tax share — RM ${t.tax.toFixed(2)}</span>
-      </div>
+      <div class="summary-lines">${dl}${sl}${pl}<span>- Tax share -- RM ${t.tax.toFixed(2)}</span></div>
     </div>`;
   }).join("");
-
   document.getElementById("summary-grand-val").textContent = "RM " + Number(grandTotal).toFixed(2);
-
-  const { restaurant, date } = state.billData;
   const waLines = [
-    "🍽️ *Lunch Bill Split*",
-    `📍 ${restaurant || ""}${date ? " · " + date : ""}`,
-    "─────────────────────",
+    "Lunch Bill Split",
+    (restaurant||"") + (date ? " - " + date : ""),
+    "---------------------",
     ...pax.map(p => `${p}: RM ${totals[p].total.toFixed(2)}`),
-    "─────────────────────",
+    "---------------------",
     `Total: RM ${Number(grandTotal).toFixed(2)}`
   ];
   document.getElementById("wa-textarea").value = waLines.join("\n");
-
   document.getElementById("summary-card").style.display = "block";
   document.getElementById("generate-btn").style.display = "none";
   document.getElementById("summary-card").scrollIntoView({ behavior: "smooth" });
 }
 
-// ── WhatsApp toggle ──
 function toggleWa() {
   const box = document.getElementById("wa-box");
   box.style.display = box.style.display === "none" ? "block" : "none";
 }
 
-// ── Error ──
 function showError(msg) {
   const el = document.getElementById("error-banner");
   el.textContent = msg;
   el.style.display = msg ? "block" : "none";
 }
 
-// ── Reset ──
 function resetApp() {
   state = { imageBase64: null, imageMediaType: null, billData: null, assignments: {} };
   document.getElementById("preview-img").src = "";
   document.getElementById("preview-container").style.display = "none";
+  document.getElementById("img-size-label").textContent = "";
   document.getElementById("upload-placeholder").style.display = "block";
   document.getElementById("splitter-section").style.display = "none";
   document.getElementById("setup-section").style.display = "block";
